@@ -6,6 +6,27 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <pthread.h>
+// #include <windows.h>
+#include "helper.hpp"
+
+// CRITICAL_SECTION mutex;
+// EnterCriticalSection
+
+
+void *receiveThread(void *socket_desc){
+    int socketfd = *(int*)socket_desc;
+    char receiveMessage[100];
+    int recvByte;
+    while(1){
+        recvByte = recv(socketfd, receiveMessage, sizeof(receiveMessage), 0);
+        if(recvByte > 0){
+            receiveMessage[recvByte] = '\0';
+            printf("Receive Msg | %s\n", receiveMessage);
+        }
+    }
+}
+
 
 int main(int argc , char *argv[])
 {
@@ -32,59 +53,60 @@ int main(int argc , char *argv[])
 
 
     int ret = connect(socketfd, (struct sockaddr *)&info, sizeof(info));
-    if(ret == -1)
-        printf("Connection error.\n");
-    
-    char receiveMessage[100];
+    if(ret == -1){
+        printf("Connection error.Close Socket.\n");
+        close(socketfd);
+        return -1;
+    }
+
+    printf("Successfully connect to server!\n");
+    // InitializeCriticalSection(&mutex);
+
+
+    // Create thread for receiving message
+    pthread_t thread_id;
+    if (pthread_create(&thread_id, nullptr, receiveThread, (void*)&socketfd) != 0) {
+        handle_socket_error("Failed to create thread for client :(\n");
+        // std::cerr << "Failed to create thread for client." << std::endl;
+        close(socketfd);
+    }
+
+
+    // char receiveMessage[100];
     char userInput[100];
 
 
 
+
+    // Read user input and send
     while(1){
-        int btye_recv = recv(socketfd, receiveMessage, sizeof(receiveMessage), 0);
-        if(btye_recv <= 0){ // Server close connection
-            fprintf(stderr, "Server disconnected.\n");
-            printf("Close Socket\n");
-            close(socketfd);
-            return 0;
-        }
-        receiveMessage[btye_recv] = '\0';
-        // printf("Byte Receive: %d\n", btye_recv);
-        printf("%s", receiveMessage);
-        memset(userInput, 0, sizeof(userInput));
         scanf("%s", userInput);
-        int ret = send(socketfd, userInput, sizeof(userInput), 0);
+        // EnterCriticalSection(&mutex);
+        send(socketfd, userInput, sizeof(userInput), 0);
+        // LeaveCriticalSection(&mutex);
+
+
+
+        // int btye_recv = recv(socketfd, receiveMessage, sizeof(receiveMessage), 0);
+        // if(btye_recv <= 0){ // Server close connection
+        //     fprintf(stderr, "Server disconnected.\n");
+        //     printf("Close Socket\n");
+        //     close(socketfd);
+        //     return 0;
+        // }
+        // receiveMessage[btye_recv] = '\0';
+        // // printf("Byte Receive: %d\n", btye_recv);
+        // printf("%s", receiveMessage);
+        // memset(userInput, 0, sizeof(userInput));
+        // scanf("%s", userInput);
+        // int ret = send(socketfd, userInput, sizeof(userInput), 0);
     }
+
     
-    // while(1){ // connection loop
-    //     while(1){ // receive info loop
-    //         if(recv(socketfd, receiveMessage, sizeof(receiveMessage), 0) <= 0){ // Server close connection
-    //             fprintf(stderr, "Server disconnected.\n");
-    //             printf("Close Socket\n");
-    //             close(socketfd);
-    //             return 0;
-    //         }
-    //         if(strstr(receiveMessage, "[INPUT]") != NULL) break;
-    //         // if(strcmp(receiveMessage, "INPUT") == 0) break;
-    //         printf("%s", receiveMessage);
-        
-    //     }
-
-    //     scanf("%s", userInput);
-    //     // if(strcmp(userInput, "exit") == 0) break; // Client close connection
-    //     // fprintf(stderr,"You enter: %s\n",userInput);
-    //     int ret = send(socketfd, userInput, sizeof(userInput), 0);
-    //     // fprintf(stderr, "Send message to server.\n");
-
-    //     if(ret == -1){
-    //         fprintf(stderr, "Sending message Error :(\n");
-    //     }
-        
-        
-    // }
 
 
     printf("Close Socket\n");
     close(socketfd);
+
     return 0;
 }

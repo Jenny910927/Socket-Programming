@@ -26,7 +26,7 @@ server.o: server.cpp
 	g++ -c server.cpp
 
 client: client.o
-	g++ -g client.o -o client
+	g++ -g client.o $(OBJS) -o client -lpthread
 
 client.o: client.cpp
 	g++ -c client.cpp
