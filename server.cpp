@@ -6,12 +6,20 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <map>
+#include <pthread.h>
+
+#include "Connection.hpp"
+#include "helper.hpp"
+#include "common.hpp"
+#include "ThreadPool.hpp"
+
 #include<iostream>
 using namespace std;
 
 
-map<string, string> userPasswordMap;
+const int port = 8800;
+const int max_client_count = 10;
+pthread_t tid[max_client_count]; // record tid of every thread/connection
 
 class Client {  
     public:  
@@ -139,110 +147,182 @@ bool incorrect_input(char inputMessage[]){
 
 
 
-int handle_connection(int clientSocketfd){
-    
-    char receiveMessage[100];
-    char welcomeMessage[] = "Welcome to Chatroom. Please select your option.\n" 
-                            "[1] Sign up   [2] Log in   [3] Exit\n";
-    char selectErrorMessage[] = "Incorrect option. Please select \"1\", \"2\", or \"3\"\n";
-    char sendMessage[100];
-    
-    Client client(clientSocketfd);
-
-    send(clientSocketfd, welcomeMessage, sizeof(welcomeMessage), 0);
-    client.send_wait();
-    recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
-
-    fprintf(stderr, "GET: %s\n", receiveMessage);
+void handle_connection(int clientSocketfd){
+    // int clientSocketfd = *(int*)socket_desc;
+    fprintf(stderr, "tid=%lu handle connection fd=%d\n", pthread_self(), clientSocketfd);
+    Connection conn(clientSocketfd);
+    conn.user_auth();
+    fprintf(stderr, "Back to handle connection\n");
 
 
-    while(incorrect_input(receiveMessage)){
-        send(clientSocketfd, selectErrorMessage, sizeof(selectErrorMessage), 0);
-        client.send_wait();
-        recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
-    }
+    // char receiveMessage[100];
+    // char welcomeMessage[] = "Welcome to Chatroom. Please select your option.\n" 
+    //                         "[1] Sign up   [2] Log in   [3] Exit\n";
+    // char selectErrorMessage[] = "Incorrect option. Please select \"1\", \"2\", or \"3\"\n";
+    // char sendMessage[100];
     
-    if(receiveMessage[0] == '1'){ // register
-        int ret = client.user_register();
-    }
-    else if(receiveMessage[0] == '2'){ // login
-        int ret = client.user_login();
-        if(ret == -1) {
-            return -1;
-        }
-    }
-    else{ // exit
-        strcpy(sendMessage, "Exit Chatroom, bye~\n");
-        send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-        return 0;
-    }
+    // Client client(clientSocketfd);
 
-    strcpy(sendMessage, "Type \"exit\" when you want to exit the chatroom.\n");
-    send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-    strcpy(sendMessage, "Who do you want chat with? UserName: ");
-    send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-    client.send_wait();
-    recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
+    // send(clientSocketfd, welcomeMessage, sizeof(welcomeMessage), 0);
+    // client.send_wait();
+    // recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
+
+    // fprintf(stderr, "GET: %s\n", receiveMessage);
+
+
+    // while(incorrect_input(receiveMessage)){
+    //     send(clientSocketfd, selectErrorMessage, sizeof(selectErrorMessage), 0);
+    //     client.send_wait();
+    //     recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
+    // }
     
-    if (strcmp(receiveMessage, "exit") == 0){
-        strcpy(sendMessage, "Exit Chatroom, bye~\n");
-        send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-        return 0;
-    }
+    // if(receiveMessage[0] == '1'){ // register
+    //     int ret = client.user_register();
+    // }
+    // else if(receiveMessage[0] == '2'){ // login
+    //     int ret = client.user_login();
+    //     if(ret == -1) {
+    //         return;
+    //     }
+    // }
+    // else{ // exit
+    //     strcpy(sendMessage, "Exit Chatroom, bye~\n");
+    //     send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
+    //     return 0;
+    // }
+
+    // strcpy(sendMessage, "Type \"exit\" when you want to exit the chatroom.\n");
+    // send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
+    // strcpy(sendMessage, "Who do you want chat with? UserName: ");
+    // send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
+    // client.send_wait();
+    // recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
+    
+    // if (strcmp(receiveMessage, "exit") == 0){
+    //     strcpy(sendMessage, "Exit Chatroom, bye~\n");
+    //     send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
+    //     return;
+    // }
     
 
     
-    // TODO: Phase 2
-    strcpy(sendMessage, "More implementation is coming...\n");
-    send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-    return 0;
+    // // TODO: Phase 2
+    // strcpy(sendMessage, "More implementation is coming...\n");
+    // send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
+    // return;
+    return;
 }
 
 
+// class SocketException : public std::runtime_error {
+//     public:
+//         SocketException(const std::string& message) : std::runtime_error(message) {}
+// };
+
+int create_welcome_socket(){
+    int socketfd = 0; 
+    // try{
+        // create socket
+        socketfd = socket(AF_INET, SOCK_STREAM, 0); // SOCK_STREAM -> TCP, SOCK_DGRAM -> UDP
+
+        if (socketfd == -1) {
+            handle_socket_error("Failed to create socket :(\n");
+            // throw SocketException("Failed to create socket: " + std::string(strerror(errno)));
+        }
+
+        // fprintf(stderr, "Successfully build socket\n");
+
+        // bind socket 
+        struct sockaddr_in serverInfo;
+        bzero(&serverInfo, sizeof(serverInfo)); // init to 0
+        serverInfo.sin_family = PF_INET; // Ipv4
+        serverInfo.sin_addr.s_addr = INADDR_ANY; // kernel decide IP
+        serverInfo.sin_port = htons(port);
+ 
+        if (bind(socketfd, (struct sockaddr *)&serverInfo, sizeof(serverInfo)) == -1) {
+            handle_socket_error("Failed to bind socket :(\n");
+            // throw SocketException("Failed to bind socket: " + std::string(strerror(errno)));
+        }
+
+        // listen
+        if(listen(socketfd, max_client_count) == -1){
+            handle_socket_error("Failed to listen on socket :(\n");
+            // throw SocketException("Failed to listen on socket: " + std::string(strerror(errno)));
+        } 
+        fprintf(stderr, "Server is listening on port 8800...\n");
+        return socketfd;
+    // }
+    // catch (const SocketException& e) {
+    //     std::cerr << "Error: " << e.what() << std::endl;
+    //     if (socketfd != -1) {
+    //         close(socketfd);
+    //     }
+    //     return EXIT_FAILURE;
+    // }
+    return socketfd;
+}
+
+// void handle_connection(int fd){
+//     cout << pthread_self() << " handle_connection" << endl;
+//     sleep(10);
+//     close(fd);
+// }
 
 
 int main(int argc , char *argv[])
-
 {
 
     // disable printf buffering
     setbuf(stdout, NULL);
 
-    // create socket
-    int socketfd = 0, clientSocketfd = 0;
-    socketfd = socket(AF_INET, SOCK_STREAM, 0); // SOCK_STREAM -> TCP, SOCK_DGRAM -> UDP
+    int socketfd = create_welcome_socket();
 
-    if (socketfd == -1){
-        fprintf(stderr, "Fail to create socket.\n");
-        return -1;
-    }
+    int clientSocketfd = 0;
 
-    fprintf(stderr, "Successfully build socket\n");
 
-    // connect socket 
-    struct sockaddr_in serverInfo, clientInfo;
+    ThreadPool pool(10);
+
+    
+    struct sockaddr_in clientInfo;
     int addrlen = sizeof(clientInfo);
-    bzero(&serverInfo, sizeof(serverInfo)); // init to 0
-
-    serverInfo.sin_family = PF_INET; // Ipv4
-    serverInfo.sin_addr.s_addr = INADDR_ANY; // kernel decide IP
-    serverInfo.sin_port = htons(8800);
-    int ret = bind(socketfd, (struct sockaddr *)&serverInfo, sizeof(serverInfo));
-    if (ret == -1){
-        fprintf(stderr, "Socket bind error\n");
-        return -1;
-    }
-
-    listen(socketfd, 5);
-    fprintf(stderr, "Start Listening...\n");
-
+    int thread_count = 0;
 
     while(1){
+    // for(int i=0 ; i<10 ; i++){
         clientSocketfd = accept(socketfd, (struct sockaddr*) &clientInfo, (socklen_t*)&addrlen);
 
-        handle_connection(clientSocketfd);
-        close(clientSocketfd);
+        if (clientSocketfd == -1) {
+            handle_socket_error("Failed to accept connection :(\n");
+            // std::cerr << "Failed to accept connection: " << strerror(errno) << std::endl;
+            continue; // Continue accepting other clients
+        }
+        fprintf(stderr, "New client connected!\n");
+        
+        
+        pool.enqueue([clientSocketfd] { handle_connection(clientSocketfd); });
+        
+        // pthread_t thread_id;
+        
+        
+        // if (pthread_create(&tid[thread_count++], nullptr, handle_connection, (void*)&clientSocketfd) != 0) {
+        //     handle_socket_error("Failed to create thread for client :(\n");
+        //     // std::cerr << "Failed to create thread for client." << std::endl;
+        //     close(clientSocketfd);
+        // }
+
+
+
+        // pthread_detach(thread_id);
+
+
+        // handle_connection(clientSocketfd);
+        // close(clientSocketfd);
 
     }
+
+
+    close(socketfd);
+
+    
     return 0;
 }
