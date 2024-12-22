@@ -33,8 +33,10 @@ string Connection::getUserName(){
 
 
 int Connection::send_msg(char *msg, size_t size){
+    // fprintf(stderr, "Sending msg: %s, size = %lu\n", msg, size);
     ssize_t bytes_sent = send(fd, msg, size, 0);
-    // fprintf(stderr, "byte sent: %ld\n", bytes_sent);
+
+    fprintf(stderr, "byte sent: %ld\n", bytes_sent);
     if(bytes_sent == -1){
         handle_socket_error("Error sending message :(\n");
     }
@@ -72,6 +74,7 @@ void Connection::close_connection(const char *reason){
     fprintf(stderr, "Connection fd: %d close. Reason: %s\n", fd, reason);
     sleep(1);
     close(fd);
+    userConnMap.erase(getUserName());
 }
 
 int Connection::user_register(){
@@ -188,14 +191,11 @@ int Connection::user_auth(){
     char welcomeMessage[] = "Welcome to Chatroom. Please select your option.\n" 
                             "[1] Sign up   [2] Log in   [3] Exit\n";
     char selectErrorMessage[] = "Incorrect option. Please select \"1\", \"2\", or \"3\"\n";
-    // char sendMessage[100];
     
     
 
     send_msg(welcomeMessage, sizeof(welcomeMessage));
     recv_msg(receiveMessage, sizeof(receiveMessage));
-    // client.send_wait();
-    // recv_msg(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
 
     fprintf(stderr, "GET: %s\n", receiveMessage);
 
@@ -203,9 +203,6 @@ int Connection::user_auth(){
     while(incorrect_input(receiveMessage)){
         send_msg(selectErrorMessage, sizeof(selectErrorMessage));
         recv_msg(selectErrorMessage, sizeof(selectErrorMessage));
-        // send(clientSocketfd, selectErrorMessage, sizeof(selectErrorMessage), 0);
-        // client.send_wait();
-        // recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
     }
     
     if(receiveMessage[0] == '1'){ // register
@@ -213,18 +210,12 @@ int Connection::user_auth(){
         
     }
     else if(receiveMessage[0] == '2'){ // login
-        // try{
-        
         int ret = user_login();
         if(ret == -1){
             fprintf(stderr, "Error: Create userinfo error.\n");
-            // fprintf(stderr, "Connection %d close.\n", fd);
             close_connection("<Error> Create userinfo error.");
             return -1;
         } 
-        // } catch (const ClientException& e) {
-        //     std::cerr << "Exception caught: " << e.what() << std::endl;
-        // } 
     }
     else{ // exit
         char bye_msg[] = "Exit Chatroom, bye~\n";

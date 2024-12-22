@@ -14,7 +14,7 @@
 
 
 
-SRCS = Connection.cpp helper.cpp common.cpp ThreadPool.cpp UserInfo.cpp 
+SRCS = Connection.cpp helper.cpp common.cpp ThreadPool.cpp UserInfo.cpp Chatroom.cpp
 OBJS = $(patsubst %.cpp, %.o, $(SRCS))
 
 all: server client
