@@ -9,3 +9,6 @@ UserInfo::UserInfo(string _username, string _pwd) : username(_username), pwd(_pw
 
 UserInfo::~UserInfo() {}
 
+string UserInfo::getUserName(){
+    return username;
+}

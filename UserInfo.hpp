@@ -12,6 +12,7 @@ public:
     UserInfo();
     UserInfo(string username, string pwd);
     ~UserInfo();
+    string getUserName();
 };
 
 #endif 

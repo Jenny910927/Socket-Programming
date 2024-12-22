@@ -151,65 +151,72 @@ void handle_connection(int clientSocketfd){
     // int clientSocketfd = *(int*)socket_desc;
     fprintf(stderr, "tid=%lu handle connection fd=%d\n", pthread_self(), clientSocketfd);
     Connection conn(clientSocketfd);
-    conn.user_auth();
-    fprintf(stderr, "Back to handle connection\n");
+    int ret = conn.user_auth();
+    if(ret == -1){
+        fprintf(stderr, "User Authentication fail. End connection\n");
+        return;
+    }
 
 
-    // char receiveMessage[100];
-    // char welcomeMessage[] = "Welcome to Chatroom. Please select your option.\n" 
-    //                         "[1] Sign up   [2] Log in   [3] Exit\n";
-    // char selectErrorMessage[] = "Incorrect option. Please select \"1\", \"2\", or \"3\"\n";
-    // char sendMessage[100];
+    fprintf(stderr, "Finish user Authentication.\n");
+
+    // Add mapping (username->conn) to map
+    userConnMap[conn.getUserName()] = conn;
+
+    char sendMessage[100];
+    char receiveMessage[100];
     
-    // Client client(clientSocketfd);
-
-    // send(clientSocketfd, welcomeMessage, sizeof(welcomeMessage), 0);
-    // client.send_wait();
-    // recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
-
-    // fprintf(stderr, "GET: %s\n", receiveMessage);
-
-
-    // while(incorrect_input(receiveMessage)){
-    //     send(clientSocketfd, selectErrorMessage, sizeof(selectErrorMessage), 0);
-    //     client.send_wait();
-    //     recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
-    // }
-    
-    // if(receiveMessage[0] == '1'){ // register
-    //     int ret = client.user_register();
-    // }
-    // else if(receiveMessage[0] == '2'){ // login
-    //     int ret = client.user_login();
-    //     if(ret == -1) {
-    //         return;
-    //     }
-    // }
-    // else{ // exit
-    //     strcpy(sendMessage, "Exit Chatroom, bye~\n");
-    //     send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-    //     return 0;
-    // }
-
-    // strcpy(sendMessage, "Type \"exit\" when you want to exit the chatroom.\n");
+    strcpy(sendMessage, "Type \"exit\" when you want to exit the chatroom.\n");
+    conn.send_msg(sendMessage, sizeof(sendMessage));
     // send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-    // strcpy(sendMessage, "Who do you want chat with? UserName: ");
+    strcpy(sendMessage, "Who do you want chat with? UserName: ");
+    conn.send_msg(sendMessage, sizeof(sendMessage));
     // send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
     // client.send_wait();
-    // recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
+    conn.recv_msg(receiveMessage, sizeof(receiveMessage));
+    // recv(fd, receiveMessage, sizeof(receiveMessage), 0);
     
-    // if (strcmp(receiveMessage, "exit") == 0){
-    //     strcpy(sendMessage, "Exit Chatroom, bye~\n");
-    //     send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-    //     return;
-    // }
+    if (strcmp(receiveMessage, "exit") == 0){
+        char bye_msg[] = "Exit Chatroom, bye~\n";
+        conn.send_msg(bye_msg, sizeof(bye_msg));
+        conn.close_connection("Client Exit.");
+        return;
+    }
     
 
-    
-    // // TODO: Phase 2
-    // strcpy(sendMessage, "More implementation is coming...\n");
-    // send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-    // return;
+    string userName2 = receiveMessage;
+    if(!user_exist(userName2)){
+        char sendMessage[] = "<Chat Fail> User does not exist.\n";
+        conn.send_msg(sendMessage, sizeof(sendMessage));
+        conn.close_connection("<Chat Fail> Chat target user does not exist.");
+        return;
+    }
+    if(!user_online(userName2)){
+        char sendMessage[] = "<Chat Fail> User is not online now.\n";
+        conn.send_msg(sendMessage, sizeof(sendMessage));
+        conn.close_connection("<Chat Fail> Chat target user is not online now.");
+        return;
+    }
+
+    fprintf(stderr, "Users chat connection found!\n");
+    Connection conn2 = userConnMap[conn.getUserName()];
+    fprintf(stderr, "Users chat connection create!\n");
+
+
+
+
+
+
+
+
+
+
+    conn.close_connection("End of thread function.");
+    // fprintf(stderr, "Connection %d close.\n", fd);
+    // close(fd);
+
+
+
     return;
 }
 

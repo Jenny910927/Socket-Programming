@@ -14,6 +14,9 @@
 #include <iostream>
 // #include <cstring>
 
+
+
+Connection::Connection() : fd(-1), user() {};
 Connection::Connection(int fd) : fd(fd), user() {}
 Connection::~Connection() {
     if (fd >= 0)
@@ -24,14 +27,12 @@ void Connection::setUser(UserInfo u){
     fprintf(stderr, "setUser\n");
     user = u;
 }
+string Connection::getUserName(){
+    return user.getUserName();
+}
+
 
 int Connection::send_msg(char *msg, size_t size){
-    // char tmp[] = "[INPUT]";
-    // char *result = (char*)malloc(strlen(msg) + strlen(tmp) + 1);
-    // strcpy(result, msg);
-    // strcat(result, "[INPUT]");
-    // setbuf(stdout, NULL);
-    // fprintf(stderr, "sending message: %s\n", msg);
     ssize_t bytes_sent = send(fd, msg, size, 0);
     // fprintf(stderr, "byte sent: %ld\n", bytes_sent);
     if(bytes_sent == -1){
@@ -51,7 +52,6 @@ int Connection::recv_msg(char *msg, size_t size){
     return bytes_received;
 } 
 
-
 bool Connection::user_exist(string _name){
     return userPasswordMap.find(_name) != userPasswordMap.end();
 }
@@ -59,6 +59,19 @@ bool Connection::user_exist(string _name){
 bool Connection::correct_password(string userName, string pwd){
     fprintf(stderr, "User %s pwd is %s, get: %s\n", userName.c_str(), userPasswordMap[userName].c_str(), pwd.c_str());
     return userPasswordMap[userName].compare(pwd) == 0;
+}
+
+
+void Connection::close_connection(const char *reason){
+    sleep(1);
+    char msg[] = "Connection closed by server.\n";
+    send_msg(msg, sizeof(msg));
+    sleep(1);
+    char tag[] = "[EXIT]";
+    send_msg(tag, sizeof(tag));
+    fprintf(stderr, "Connection fd: %d close. Reason: %s\n", fd, reason);
+    sleep(1);
+    close(fd);
 }
 
 int Connection::user_register(){
@@ -110,6 +123,7 @@ int Connection::user_register(){
 }
 
 
+
 int Connection::user_login(){
     printf("user_login\n");
 
@@ -121,8 +135,9 @@ int Connection::user_login(){
     // char userName[25];
 
     if(!user_exist(receiveMessage)){
-        strcpy(sendMessage, "User not exist. Connection Closed.\n");
+        strcpy(sendMessage, "<Login Fail> User not exist.\n");
         send_msg(sendMessage, sizeof(sendMessage));
+        // close_connection("<Login Fail> User not exist.");
         // throw ClientException("Client Create Error: User not exist.");
         return -1;
     }
@@ -141,8 +156,9 @@ int Connection::user_login(){
         count -= 1;
     }
     if (count == 0){
-        sprintf(sendMessage, "Password incorrect. Connection closed.\n");
+        sprintf(sendMessage, "<Login Fail> Password incorrect.\n");
         send_msg(sendMessage, sizeof(sendMessage));
+        // close_connection("<Login Fail> Password incorrect.");
         return -1;
         // throw ClientException("Client Create Error: pwd wrong");
         
@@ -168,6 +184,7 @@ int Connection::user_auth(){
 
 
     char receiveMessage[100];
+    char sendMessage[100];
     char welcomeMessage[] = "Welcome to Chatroom. Please select your option.\n" 
                             "[1] Sign up   [2] Log in   [3] Exit\n";
     char selectErrorMessage[] = "Incorrect option. Please select \"1\", \"2\", or \"3\"\n";
@@ -200,10 +217,10 @@ int Connection::user_auth(){
         
         int ret = user_login();
         if(ret == -1){
-            fprintf(stderr, "Create userinfo error.\n");
-            fprintf(stderr, "Connection %d close.\n", fd);
-            close(fd);
-            return 0;
+            fprintf(stderr, "Error: Create userinfo error.\n");
+            // fprintf(stderr, "Connection %d close.\n", fd);
+            close_connection("<Error> Create userinfo error.");
+            return -1;
         } 
         // } catch (const ClientException& e) {
         //     std::cerr << "Exception caught: " << e.what() << std::endl;
@@ -212,33 +229,9 @@ int Connection::user_auth(){
     else{ // exit
         char bye_msg[] = "Exit Chatroom, bye~\n";
         send_msg(bye_msg, sizeof(bye_msg));
-        fprintf(stderr, "Client exit, Connection %d close.\n", fd);
-        close(fd);
-        return 0;
+        close_connection("Client Exit.");
+        return -1;
     }
-
-    // strcpy(sendMessage, "Type \"exit\" when you want to exit the chatroom.\n");
-    // send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-    // strcpy(sendMessage, "Who do you want chat with? UserName: ");
-    // send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-    // client.send_wait();
-    // recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
-    
-    // if (strcmp(receiveMessage, "exit") == 0){
-    //     strcpy(sendMessage, "Exit Chatroom, bye~\n");
-    //     send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-    //     return;
-    // }
-    
-
-    
-    // TODO: Phase 2
-    // strcpy(sendMessage, "More implementation is coming...\n");
-    // send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-    // return;
-
-    fprintf(stderr, "Connection %d close.\n", fd);
-    close(fd);
 
     return 0;
 }

@@ -7,11 +7,16 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <pthread.h>
-// #include <windows.h>
+#include <atomic>
+#include <sys/select.h>
+#include <errno.h>
 #include "helper.hpp"
 
 // CRITICAL_SECTION mutex;
 // EnterCriticalSection
+
+std::atomic<bool> exitFlag(false);
+
 
 
 void *receiveThread(void *socket_desc){
@@ -20,11 +25,23 @@ void *receiveThread(void *socket_desc){
     int recvByte;
     while(1){
         recvByte = recv(socketfd, receiveMessage, sizeof(receiveMessage), 0);
+        // printf("Receive Msg | %s\n", receiveMessage);
         if(recvByte > 0){
+            if(strstr(receiveMessage, "[EXIT]")){
+                exitFlag.store(true); 
+                // printf("Receive [EXIT]");
+                printf("Type any key to close... ");
+                break;
+            }
             receiveMessage[recvByte] = '\0';
-            printf("Receive Msg | %s\n", receiveMessage);
+            // printf("Receive Msg | %s\n", receiveMessage);
+            printf("%s", receiveMessage);
+        }
+        else{
+            break;
         }
     }
+    return nullptr;
 }
 
 
@@ -70,7 +87,7 @@ int main(int argc , char *argv[])
         // std::cerr << "Failed to create thread for client." << std::endl;
         close(socketfd);
     }
-
+    
 
     // char receiveMessage[100];
     char userInput[100];
@@ -79,30 +96,78 @@ int main(int argc , char *argv[])
 
 
     // Read user input and send
-    while(1){
+    while(!exitFlag.load()){
         scanf("%s", userInput);
         // EnterCriticalSection(&mutex);
         send(socketfd, userInput, sizeof(userInput), 0);
         // LeaveCriticalSection(&mutex);
 
-
-
-        // int btye_recv = recv(socketfd, receiveMessage, sizeof(receiveMessage), 0);
-        // if(btye_recv <= 0){ // Server close connection
-        //     fprintf(stderr, "Server disconnected.\n");
-        //     printf("Close Socket\n");
-        //     close(socketfd);
-        //     return 0;
-        // }
-        // receiveMessage[btye_recv] = '\0';
-        // // printf("Byte Receive: %d\n", btye_recv);
-        // printf("%s", receiveMessage);
-        // memset(userInput, 0, sizeof(userInput));
-        // scanf("%s", userInput);
-        // int ret = send(socketfd, userInput, sizeof(userInput), 0);
     }
 
-    
+
+    //  while (!exitFlag.load()) {
+    //     // Use fgets instead of scanf to handle spaces and avoid scanf's blocking nature
+    //     if (fgets(userInput, sizeof(userInput), stdin) != nullptr) {
+    //         // Remove the trailing newline character from fgets
+    //         size_t len = strlen(userInput);
+    //         if (len > 0 && userInput[len - 1] == '\n') {
+    //             userInput[len - 1] = '\0';
+    //         }
+
+    //         // Send the user input to the server
+    //         if (send(socketfd, userInput, strlen(userInput), 0) == -1) {
+    //             perror("send");
+    //             break;
+    //         }
+    //     } else if (feof(stdin)) {
+    //         // Handle EOF (Ctrl+D on Linux)
+    //         break;
+    //     }
+    // }
+
+    // fd_set read_fds;
+    // while (!exitFlag.load()) {
+    //     FD_ZERO(&read_fds);
+    //     FD_SET(STDIN_FILENO, &read_fds);
+    //     int fd_stdin;
+    //     fd_stdin = fileno(stdin);
+    //     #define MAXBYTES 80
+
+    //     struct timeval timeout = {1, 0}; // 1-second timeout
+    //     int ret = select(STDIN_FILENO + 1, &read_fds, NULL, NULL, &timeout);
+
+    //     int num_readable = select(fd_stdin + 1, &read_fds, NULL, NULL, &timeout);
+    //     if (num_readable > 0){
+    //         int num_bytes = read(fd_stdin, userInput, MAXBYTES);
+    //         if (num_bytes < 0) {
+    //                 fprintf(stderr, "\nError on read : %s\n", strerror(errno));
+    //                 exit(1);
+    //         }
+    //         /* process command, maybe by sscanf */
+    //         printf("\nRead %d bytes\n", num_bytes);
+    //         send(socketfd, userInput, sizeof(userInput), 0);
+    //          /* to terminate loop, since I don't process anything */
+    //     }
+
+
+
+    //     // if (ret > 0 && FD_ISSET(STDIN_FILENO, &read_fds)) {
+    //     //     if (fgets(userInput, sizeof(userInput), stdin)) {
+    //     //         // printf("User userInput: %s", userInput);
+    //     //         size_t len = strlen(userInput);
+    //     //         if (len > 0 && userInput[len-1] == '\n') {
+    //     //             userInput[--len] = '\0';
+    //     //         }
+    //     //         send(socketfd, userInput, sizeof(userInput), 0);
+                
+    //     //     }
+    //     // } else if (exitFlag.load()) {
+    //     //     break;
+    //     // }
+    // }
+
+
+    // if (recvThread.joinable()) { recvThread.join();
 
 
     printf("Close Socket\n");

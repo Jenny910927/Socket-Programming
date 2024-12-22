@@ -21,13 +21,15 @@ private:
     void setUser(UserInfo u);
     
 public:
+    Connection();
     Connection(int fd);
     ~Connection();
     int send_msg(char *msg, size_t size);
     int recv_msg(char *msg, size_t size);
-    // int read_msg();
     int user_auth();
     UserInfo user;
+    void close_connection(const char *reason);
+    string getUserName();
     // int read(void *buf, size_t count);
     // int write(void *buf, size_t count);
     // int write(const std::string &msg);
