@@ -11,6 +11,7 @@ extern std::map<string, Connection*> userConnMap; //username -> socket connectio
 // extern std::map<string, pthread_cond_t> waitUser; // user that is waiting for another user to join chatroom
 extern std::map<string, bool> waitUser; // user that is waiting for another user to join chatroom
 extern int chatroom_count;
+extern int client_count;
 // extern pthread_mutex_t lock;
 
 #endif

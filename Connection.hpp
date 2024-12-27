@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <string.h>
+#include <openssl/ssl.h>
 #include "helper.hpp"
 #include "UserInfo.hpp"
 using namespace std;
@@ -12,6 +13,10 @@ const int SOCKBUFSIZE = 5000;
 
 class Connection {
     int fd;
+    SSL *ssl;
+    SSL *send_ssl;
+    unsigned long ip;
+    int port;
 private:
     bool incorrect_input(char* input_msg);
     int user_register();
@@ -22,7 +27,7 @@ private:
     
 public:
     Connection();
-    Connection(int fd);
+    Connection(int fd, SSL *ssl, int base_port);
     ~Connection();
     int send_msg(char *msg, size_t size);
     int recv_msg(char *msg, size_t size);
@@ -30,9 +35,8 @@ public:
     UserInfo user;
     void close_connection(const char *reason);
     string getUserName();
-    // int read(void *buf, size_t count);
-    // int write(void *buf, size_t count);
-    // int write(const std::string &msg);
+    int create_pipe(SSL_CTX *ctx);
+    bool _switch;
 };
 
 #endif 

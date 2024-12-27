@@ -7,4 +7,4 @@ std::map<string, bool> waitUser;
 
 int chatroom_count = 0;
 // pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-
+int client_count = 0;

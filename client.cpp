@@ -10,22 +10,59 @@
 #include <atomic>
 #include <sys/select.h>
 #include <errno.h>
+#include <openssl/ssl.h> 
+#include <openssl/err.h>
 #include "helper.hpp"
+// #define CHK_SSL(err) if ((err)==-1) {  printf("ERROR\n"); ERR_print_errors_fp(stderr); exit(2); }
 
-// CRITICAL_SECTION mutex;
-// EnterCriticalSection
 
 std::atomic<bool> exitFlag(false);
 
 
 
 void *receiveThread(void *socket_desc){
-    int socketfd = *(int*)socket_desc;
+
+    fprintf(stderr, "Enter receiveThread\n");
+    // return nullptr;
+    int recvSocketfd = *(int*)socket_desc;
+    // SSL *ssl = (SSL*)socket_desc;
+    SSL_CTX *ctx = SSL_CTX_new(TLS_client_method()); 
+    if (!ctx) { 
+        ERR_print_errors_fp(stderr); 
+        close(recvSocketfd); 
+        return nullptr; 
+    }
+    
+
+    fprintf(stderr, "Creating SSL...\n");
+
+    // Create SSL object 
+    SSL *ssl = SSL_new(ctx);
+    fprintf(stderr, "Create new recv_ssl!\n");
+    SSL_set_fd(ssl, recvSocketfd);
+    sleep(1);
+    if (SSL_connect(ssl) <= 0) { 
+        printf("Setting SSL error :( \n");
+        ERR_print_errors_fp(stderr); 
+        SSL_free(ssl); 
+        SSL_CTX_free(ctx); 
+        close(recvSocketfd); 
+        return nullptr; 
+    }
+    printf("Successfully create recv_ssl!\n");
+
+
+
+    
+
+
     char receiveMessage[100];
+    // char     buf [4096];
+
     int recvByte;
     while(1){
-        recvByte = recv(socketfd, receiveMessage, sizeof(receiveMessage), 0);
-        // printf("Receive Msg | %s\n", receiveMessage);
+        recvByte = SSL_read(ssl, receiveMessage, 100); 
+        // printf("Receive Byte = %d\n", recvByte);
         if(recvByte > 0){
             if(strstr(receiveMessage, "[EXIT]")){
                 exitFlag.store(true); 
@@ -35,9 +72,19 @@ void *receiveThread(void *socket_desc){
             }
             receiveMessage[recvByte] = '\0';
             // printf("Receive Msg | %s\n", receiveMessage);
-            printf("%s", receiveMessage);
+            fprintf(stdout, "%s", receiveMessage);
+        }else if (recvByte < 0) { 
+            int err = SSL_get_error(ssl, recvByte); 
+            if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) { 
+                continue; 
+            } else { 
+                ERR_print_errors_fp(stderr); 
+                // sleep(1);
+                break; 
+            } 
         }
         else{
+            fprintf(stderr, "Receive 0 Byte :( \n");
             break;
         }
     }
@@ -45,10 +92,91 @@ void *receiveThread(void *socket_desc){
 }
 
 
+int create_welcome_socket(int port){
+    int socketfd = 0; 
+
+    // create socket
+    socketfd = socket(AF_INET, SOCK_STREAM, 0); // SOCK_STREAM -> TCP, SOCK_DGRAM -> UDP
+
+    if (socketfd == -1) {
+        handle_socket_error("Failed to create socket :(\n");
+        
+    }
+
+    // bind socket 
+    struct sockaddr_in serverInfo;
+    bzero(&serverInfo, sizeof(serverInfo)); // init to 0
+    serverInfo.sin_family = PF_INET; // Ipv4
+    serverInfo.sin_addr.s_addr = inet_addr("127.0.0.1"); // kernel decide IP
+    serverInfo.sin_port = htons(port);
+
+    if (bind(socketfd, (struct sockaddr *)&serverInfo, sizeof(serverInfo)) == -1) {
+        handle_socket_error("Failed to bind socket :(\n");
+    }
+
+    // listen
+    if(listen(socketfd, 5) == -1){
+        handle_socket_error("Failed to listen on socket :(\n");
+    } 
+    fprintf(stderr, "Client is listening on port %d...\n", port);
+    return socketfd;
+}
+
+
+
+int create_recv_fd(SSL_CTX *ctx , SSL *ssl){
+    fprintf(stderr, "Creating pipe...\n");
+    int recvByte;
+    char receiveMessage[100];
+    recvByte = SSL_read(ssl, receiveMessage, 100); 
+    printf("Receive Byte = %d\n", recvByte);
+    printf("Receive msg = %s\n", receiveMessage);
+    
+    int port;
+    if(recvByte > 0){
+        receiveMessage[recvByte] = '\0';
+        sscanf(receiveMessage, "%d", &port);
+        // printf("Receive Msg | %s\n", receiveMessage);
+        fprintf(stdout, "Receive port: %d\n", port);
+    }
+
+    int listening_fd = create_welcome_socket(port);
+
+
+    struct sockaddr_in serverInfo;
+    int addrlen = sizeof(serverInfo);
+    int thread_count = 0;
+    int recvSocketfd = accept(listening_fd, (struct sockaddr*) &serverInfo, (socklen_t*)&addrlen);
+
+    if (recvSocketfd == -1) {
+        handle_socket_error("Failed to accept connection :(\n");
+        return -1; // Continue accepting other clients
+    }
+    fprintf(stderr, "Connectted with server!\n");   
+
+    return recvSocketfd;
+
+
+    // char msg[100];
+    // sprintf(msg, "%d", port);
+    // ssize_t bytes_sent = SSL_write(recv_ssl, msg, sizeof(msg));
+    // fprintf(stderr, "Byte send: %lu\n", bytes_sent);
+
+    
+    // return recv_ssl;
+
+}
+
 int main(int argc , char *argv[])
 {
     // disable printf buffering
     setbuf(stdout, NULL);
+
+
+    // init OpenSSL
+    SSL_library_init(); 
+    SSL_load_error_strings(); 
+    OpenSSL_add_all_algorithms();
 
     // create socket
     int socketfd = 0;
@@ -77,31 +205,53 @@ int main(int argc , char *argv[])
     }
 
     printf("Successfully connect to server!\n");
-    // InitializeCriticalSection(&mutex);
 
 
+    // Create SSL context 
+    SSL_CTX *ctx = SSL_CTX_new(TLS_client_method()); 
+    if (!ctx) { 
+        ERR_print_errors_fp(stderr); 
+        close(socketfd); 
+        return -1; 
+    }
+    // Create SSL object 
+    SSL *ssl = SSL_new(ctx); 
+    SSL_set_fd(ssl, socketfd);
+    if (SSL_connect(ssl) <= 0) { 
+        ERR_print_errors_fp(stderr); 
+        SSL_free(ssl); 
+        SSL_CTX_free(ctx); 
+        close(socketfd); 
+        return -1; 
+    }
+
+    printf("Sending SSL create successfully!\n");
+
+    
+    int recv_socketfd = create_recv_fd(ctx, ssl);
+    // SSL *recv_ssl = create_recv_fd(ctx, ssl);
+    
+
+    fprintf(stderr,"Creating pthread...\n");
+    
     // Create thread for receiving message
     pthread_t thread_id;
-    if (pthread_create(&thread_id, nullptr, receiveThread, (void*)&socketfd) != 0) {
+    if (pthread_create(&thread_id, nullptr, receiveThread, (void*)&recv_socketfd) != 0) {
         handle_socket_error("Failed to create thread for client :(\n");
-        // std::cerr << "Failed to create thread for client." << std::endl;
         close(socketfd);
     }
     
 
+
+
     // char receiveMessage[100];
     char userInput[100];
-
-
-
 
     // Read user input and send
     while(!exitFlag.load()){
         scanf("%s", userInput);
-        // EnterCriticalSection(&mutex);
-        send(socketfd, userInput, sizeof(userInput), 0);
-        // LeaveCriticalSection(&mutex);
-
+        SSL_write(ssl, userInput, strlen(userInput));
+        // send(socketfd, userInput, sizeof(userInput), 0);
     }
 
 
@@ -171,6 +321,9 @@ int main(int argc , char *argv[])
 
 
     printf("Close Socket\n");
+    SSL_shutdown(ssl); 
+    SSL_free(ssl); 
+    SSL_CTX_free(ctx);
     close(socketfd);
 
     return 0;
