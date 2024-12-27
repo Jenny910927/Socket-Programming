@@ -6,243 +6,261 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <map>
+#include <pthread.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
+
+#include "Connection.hpp"
+#include "helper.hpp"
+#include "common.hpp"
+#include "ThreadPool.hpp"
+#include "Chatroom.hpp"
+
 #include<iostream>
 using namespace std;
 
 
-map<string, string> userPasswordMap;
-
-class Client {  
-    public:  
-        Client(int socketfd) : clientSocketfd(socketfd) {
-            printf("Create client, socketfd = %d\n",socketfd);
-        }  
-        
-
-        int user_login(){
-            printf("user_login\n");
-
-            char sendMessage[100] = "Please enter user name: ";
-            char receiveMessage[100];
-            send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-            send_wait();
-            recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
-
-            // char userName[25];
-            
-
-            if(!user_exist(receiveMessage)){
-                strcpy(sendMessage, "User not exist. Connection Closed.\n");
-                send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-                return -1;
-            }
-            string userName = receiveMessage;
-
-            strcpy(sendMessage, "Please enter password: ");
-            send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-            send_wait();
-            recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
-
-            int count = 2;
-            while(count > 0 && !correct_password(userName, receiveMessage)){
-                sprintf(sendMessage, "Password incorrect. Please enter password (remaining try: %d): ", count);
-                send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-                send_wait();
-                recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
-                count -= 1;
-            }
-            if (count == 0){
-                sprintf(sendMessage, "Password incorrect. Connection closed.\n");
-                send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-                return -1;
-            }
-
-            sprintf(sendMessage, "Successfully log in. Hi, %s!\n", userName.c_str());
-            send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-            
-            return 0;
-        }
-
-        int user_register(){
-            printf("user_register\n");
+const int server_port = 8800;
+const int max_client_count = 10;
+pthread_t tid[max_client_count]; // record tid of every thread/connection
 
 
-            // Register: set username
-            char sendMessage[100] = "Register as new user, please enter username: ";
-            char receiveMessage[100];
-
-            // send_and_receive(sendMessage, receiveMessage);
-            send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-            send_wait();
-            recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
-            
-
-            while(user_exist(receiveMessage)){
-                strcpy(sendMessage, "Username exist. Please enter another username: ");
-                send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-                send_wait();
-                recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
-            }
-
-            string userName = receiveMessage;
-
-            // Register: set password
-            strcpy(sendMessage, "Please enter password: ");
-            send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-            send_wait();
-            recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
-
-            string pwd = receiveMessage;
-
-            fprintf(stderr, "Receive username: %s, pwd: %s\n", userName.c_str(), pwd.c_str());
-
-            // Save new user's info
-            userPasswordMap[userName] = pwd;
-            sprintf(sendMessage, "Successfully register. Hi, %s!\n", userName.c_str());
-            send(clientSocketfd, sendMessage, sizeof(sendMessage), 0); 
-            return 0;
-        }
-        void send_wait(){
-            fprintf(stderr, "Enter send_wait\n");
-            char waitMessage[] = "INPUT";
-            send(clientSocketfd, waitMessage, sizeof(waitMessage), 0);
-            fprintf(stderr, "Leave send_wait\n");
-        }
-
-
-    private:  
-        int clientSocketfd;  
-        bool user_exist(string inputName){
-            // fprintf(stderr, "Find User... %d", userPasswordMap.find(inputName));
-            return userPasswordMap.find(inputName) != userPasswordMap.end();
-        }
-
-        bool correct_password(string userName, string pwd){
-            fprintf(stderr, "User %s pwd is %s, get: %s\n", userName.c_str(), userPasswordMap[userName].c_str(), pwd.c_str());
-            return userPasswordMap[userName].compare(pwd) == 0;
-        }
-
-        void send_and_receive(char* sendMessage, char* receiveMessage){
-            send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-            recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
-        }
-
-};  
-
-
-bool incorrect_input(char inputMessage[]){
-    return strlen(inputMessage) != 1 || (inputMessage[0] != '1' && inputMessage[0] != '2' && inputMessage[0] != '3');
+SSL_CTX* create_server_context() {
+    SSL_CTX *ctx;
+    ctx = SSL_CTX_new(TLS_server_method());
+    if (!ctx) {
+        perror("Unable to create SSL context");
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
+    return ctx;
 }
 
+void configure_server_context(SSL_CTX *ctx) {
+    if (SSL_CTX_use_certificate_file(ctx, "server.crt", SSL_FILETYPE_PEM) <= 0) {
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
+    if (SSL_CTX_use_PrivateKey_file(ctx, "server.key", SSL_FILETYPE_PEM) <= 0) {
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
+}
 
+void handle_connection(int clientSocketfd, SSL_CTX *ctx){
 
-
-
-int handle_connection(int clientSocketfd){
     
-    char receiveMessage[100];
-    char welcomeMessage[] = "Welcome to Chatroom. Please select your option.\n" 
-                            "[1] Sign up   [2] Log in   [3] Exit\n";
-    char selectErrorMessage[] = "Incorrect option. Please select \"1\", \"2\", or \"3\"\n";
+    SSL *ssl = SSL_new(ctx); 
+    SSL_set_fd(ssl, clientSocketfd); // Perform SSL handshake 
+    if (SSL_accept(ssl) <= 0){ 
+        ERR_print_errors_fp(stderr);
+        close_SSL(ssl);
+        return;
+    }
+
+    // int clientSocketfd = *(int*)socket_desc;
+    fprintf(stderr, "tid=%lu handle connection fd=%d\n", pthread_self(), clientSocketfd);
+    fprintf(stderr, "SSL handshake successful for fd=%d\n", clientSocketfd);
+
+    Connection conn(clientSocketfd, ssl, server_port);
+
+    conn.create_pipe(ctx);
+
+
+    int ret = conn.user_auth();
+    if(ret == -1){
+        fprintf(stderr, "User Authentication fail. End connection\n");
+        close_SSL(ssl);
+        return;
+    }
+
+
+    fprintf(stderr, "Finish user Authentication.\n");
+
+    // Add mapping (username->conn) to map
+    userConnMap[conn.getUserName()] = &conn;
+
     char sendMessage[100];
+    char receiveMessage[100];
     
-    Client client(clientSocketfd);
-
-    send(clientSocketfd, welcomeMessage, sizeof(welcomeMessage), 0);
-    client.send_wait();
-    recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
-
-    fprintf(stderr, "GET: %s\n", receiveMessage);
-
-
-    while(incorrect_input(receiveMessage)){
-        send(clientSocketfd, selectErrorMessage, sizeof(selectErrorMessage), 0);
-        client.send_wait();
-        recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
-    }
-    
-    if(receiveMessage[0] == '1'){ // register
-        int ret = client.user_register();
-    }
-    else if(receiveMessage[0] == '2'){ // login
-        int ret = client.user_login();
-        if(ret == -1) {
-            return -1;
-        }
-    }
-    else{ // exit
-        strcpy(sendMessage, "Exit Chatroom, bye~\n");
-        send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-        return 0;
-    }
-
     strcpy(sendMessage, "Type \"exit\" when you want to exit the chatroom.\n");
-    send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
+    conn.send_msg(sendMessage, sizeof(sendMessage));
     strcpy(sendMessage, "Who do you want chat with? UserName: ");
-    send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-    client.send_wait();
-    recv(clientSocketfd, receiveMessage, sizeof(receiveMessage), 0);
+    conn.send_msg(sendMessage, sizeof(sendMessage));
+    conn.recv_msg(receiveMessage, sizeof(receiveMessage));
     
     if (strcmp(receiveMessage, "exit") == 0){
-        strcpy(sendMessage, "Exit Chatroom, bye~\n");
-        send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-        return 0;
+        char bye_msg[] = "Exit Chatroom, bye~\n";
+        conn.send_msg(bye_msg, sizeof(bye_msg));
+        conn.close_connection("Client Exit.");
+        close_SSL(ssl);
+        return;
     }
     
 
-    
-    // TODO: Phase 2
-    strcpy(sendMessage, "More implementation is coming...\n");
-    send(clientSocketfd, sendMessage, sizeof(sendMessage), 0);
-    return 0;
+    string userName2 = receiveMessage;
+    if(!user_exist(userName2)){
+        char sendMessage[] = "<Chat Fail> User does not exist.\n";
+        conn.send_msg(sendMessage, sizeof(sendMessage));
+        conn.close_connection("<Chat Fail> Chat target user does not exist.");
+        close_SSL(ssl);
+        return;
+    }
+    if(!user_online(userName2)){
+        char sendMessage[] = "<Chat Fail> User is not online now.\n";
+        conn.send_msg(sendMessage, sizeof(sendMessage));
+        conn.close_connection("<Chat Fail> Chat target user is not online now.");
+        close_SSL(ssl);
+        return;
+    }
+
+    fprintf(stderr, "Users chat connection found!\n");
+    Connection &conn2 = *(userConnMap[userName2]);
+    fprintf(stderr, "Users chat connection create!\n");
+
+
+    Chatroom chatroom(conn, conn2);
+
+    // join chatroom
+    chatroom.join();
+
+
+    strcpy(sendMessage, "~~ Welcome to the chatroom ~~\n");
+    conn.send_msg(sendMessage, strlen(sendMessage));
+    // chatroom.broadcase(sendMessage);
+
+    chatroom.run();
+
+    fprintf(stderr, "End of connection with %s\n", conn.getUserName().c_str());
+
+    // close_SSL(ssl);
+    return;
 }
 
 
+int create_welcome_socket(){
+    int socketfd = 0; 
 
+    // create socket
+    socketfd = socket(AF_INET, SOCK_STREAM, 0); // SOCK_STREAM -> TCP, SOCK_DGRAM -> UDP
+
+    if (socketfd == -1) {
+        handle_socket_error("Failed to create socket :(\n");
+        
+    }
+
+    // bind socket 
+    struct sockaddr_in serverInfo;
+    bzero(&serverInfo, sizeof(serverInfo)); // init to 0
+    serverInfo.sin_family = PF_INET; // Ipv4
+    serverInfo.sin_addr.s_addr = INADDR_ANY; // kernel decide IP
+    serverInfo.sin_port = htons(server_port);
+
+    if (bind(socketfd, (struct sockaddr *)&serverInfo, sizeof(serverInfo)) == -1) {
+        handle_socket_error("Failed to bind socket :(\n");
+    }
+
+    // listen
+    if(listen(socketfd, max_client_count) == -1){
+        handle_socket_error("Failed to listen on socket :(\n");
+    } 
+    fprintf(stderr, "Server is listening on port 8800...\n");
+    return socketfd;
+}
+
+
+// int create_listening_socket(int port, int max_conn_count){
+//     // int socketfd = 0; 
+
+//     // create socket
+//     int socketfd = socket(AF_INET, SOCK_STREAM, 0); // SOCK_STREAM -> TCP, SOCK_DGRAM -> UDP
+
+//     if (socketfd == -1) {
+//         handle_socket_error("Failed to create socket :(\n");
+        
+//     }
+
+//     // bind socket 
+//     struct sockaddr_in serverInfo;
+//     bzero(&serverInfo, sizeof(serverInfo)); // init to 0
+//     serverInfo.sin_family = PF_INET; // Ipv4
+//     serverInfo.sin_addr.s_addr = INADDR_LOOPBACK; // kernel decide IP
+//     serverInfo.sin_port = htons(port);
+
+//     if (bind(socketfd, (struct sockaddr *)&serverInfo, sizeof(serverInfo)) == -1) {
+//         handle_socket_error("Failed to bind socket :(\n");
+//     }
+
+//     // listen
+//     if(listen(socketfd, max_conn_count) == -1){
+//         handle_socket_error("Failed to listen on socket :(\n");
+//     } 
+//     fprintf(stderr, "Server is listening on port %d...\n", port);
+//     return 0;
+// }
 
 int main(int argc , char *argv[])
-
 {
-
     // disable printf buffering
     setbuf(stdout, NULL);
 
-    // create socket
-    int socketfd = 0, clientSocketfd = 0;
-    socketfd = socket(AF_INET, SOCK_STREAM, 0); // SOCK_STREAM -> TCP, SOCK_DGRAM -> UDP
+    // init OpenSSL
+    SSL_library_init(); 
+    SSL_load_error_strings(); 
+    OpenSSL_add_all_algorithms();
 
-    if (socketfd == -1){
-        fprintf(stderr, "Fail to create socket.\n");
-        return -1;
-    }
 
-    fprintf(stderr, "Successfully build socket\n");
 
-    // connect socket 
-    struct sockaddr_in serverInfo, clientInfo;
+
+    int socketfd = create_welcome_socket();
+    int clientSocketfd = 0;
+
+
+    ThreadPool pool(10);
+
+    
+    struct sockaddr_in clientInfo;
     int addrlen = sizeof(clientInfo);
-    bzero(&serverInfo, sizeof(serverInfo)); // init to 0
-
-    serverInfo.sin_family = PF_INET; // Ipv4
-    serverInfo.sin_addr.s_addr = INADDR_ANY; // kernel decide IP
-    serverInfo.sin_port = htons(8800);
-    int ret = bind(socketfd, (struct sockaddr *)&serverInfo, sizeof(serverInfo));
-    if (ret == -1){
-        fprintf(stderr, "Socket bind error\n");
-        return -1;
-    }
-
-    listen(socketfd, 5);
-    fprintf(stderr, "Start Listening...\n");
-
+    int thread_count = 0;
 
     while(1){
+    // for(int i=0 ; i<10 ; i++){
         clientSocketfd = accept(socketfd, (struct sockaddr*) &clientInfo, (socklen_t*)&addrlen);
 
-        handle_connection(clientSocketfd);
-        close(clientSocketfd);
+        if (clientSocketfd == -1) {
+            handle_socket_error("Failed to accept connection :(\n");
+            continue; // Continue accepting other clients
+        }
+        fprintf(stderr, "New client connected!\n");
+        
+        // init SSL context for each connection 
+        static SSL_CTX *ctx = create_server_context(); 
+        configure_server_context(ctx); // Create an SSL object 
+        pool.enqueue([clientSocketfd] { handle_connection(clientSocketfd, ctx); });
+        
+        // pthread_t thread_id;
+        
+        
+        // if (pthread_create(&tid[thread_count++], nullptr, handle_connection, (void*)&clientSocketfd) != 0) {
+        //     handle_socket_error("Failed to create thread for client :(\n");
+        //     // std::cerr << "Failed to create thread for client." << std::endl;
+        //     close(clientSocketfd);
+        // }
+
+
+
+        // pthread_detach(thread_id);
+
+
+        // handle_connection(clientSocketfd);
+        // close(clientSocketfd);
 
     }
+
+
+    close(socketfd);
+
+    
     return 0;
 }
