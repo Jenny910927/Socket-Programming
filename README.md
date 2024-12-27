@@ -1,5 +1,5 @@
 # Socket-Programming
-B10902080 胡家榆
+資工四 B10902080 胡家榆
 
 
 
@@ -13,18 +13,24 @@ B10902080 胡家榆
 
 ### Compilation Instructions
 
-To compile the C++ files, use the following commands:
+Using the Makefile to compile the C++ files.
+
+For all:
+
+```bash
+make
+```
 
 For the server:
 
 ```bash
-g++ -g server.cpp -o server
+make server
 ```
 
 For the client:
 
 ```bash
-g++ -g client.cpp -o client
+make client
 ```
 
 ------

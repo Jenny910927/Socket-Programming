@@ -49,20 +49,14 @@ string Connection::getUserName(){
 
 
 int Connection::send_msg(char *msg, size_t size){
-    // fprintf(stderr, "Sending msg: %s, size = %lu\n", msg, size);
-    // ssize_t bytes_sent = send(fd, msg, size, 0);
     ssize_t bytes_sent;
 
     if(_switch){
-        fprintf(stderr, "Sending msg thru send_ssl: %s, size = %lu\n", msg, size);
         bytes_sent = SSL_write(send_ssl, msg, size);
     } else {
-        fprintf(stderr, "Sending msg thru ssl: %s, size = %lu\n", msg, size);
         bytes_sent = SSL_write(ssl, msg, size);
     }
 
-
-    fprintf(stderr, "byte sent: %ld\n", bytes_sent);
     if(bytes_sent <= 0){
         handle_socket_error("Error sending message :(\n");
     }
@@ -72,13 +66,11 @@ int Connection::send_msg(char *msg, size_t size){
 int Connection::recv_msg(char *msg, size_t size){
     setbuf(stdout, NULL);
     ssize_t bytes_received;
-    // ssize_t bytes_received = recv(fd, msg, size, 0);
     
     bytes_received = SSL_read(ssl, msg, size);
     
     if(bytes_received > 0){
         msg[bytes_received] = '\0';
-        fprintf(stderr,"receiving message: %s\n", msg);
     } 
     else{
         handle_socket_error("Error receiving message :(\n", false);
@@ -92,7 +84,6 @@ bool Connection::user_exist(string _name){
 }
 
 bool Connection::correct_password(string userName, string pwd){
-    fprintf(stderr, "User %s pwd is %s, get: %s\n", userName.c_str(), userPasswordMap[userName].c_str(), pwd.c_str());
     return userPasswordMap[userName].compare(pwd) == 0;
 }
 
@@ -107,11 +98,8 @@ void Connection::close_connection(const char *reason){
     fprintf(stderr, "Connection fd: %d close. Reason: %s\n", fd, reason);
     sleep(1);
     close_SSL(ssl);
-    // fprintf(stderr, "Close ssl\n");
     close_SSL(send_ssl);
-    // fprintf(stderr, "Close send_ssl\n");
     close(fd);
-    // fprintf(stderr, "Close fd\n");
     userConnMap.erase(getUserName());
 }
 
@@ -122,12 +110,6 @@ int Connection::create_pipe(SSL_CTX *ctx){
     char receiveMessage[100];
     sprintf(sendMessage, "%d", port);
     send_msg(sendMessage, sizeof(sendMessage));
-    // sleep(5);
-    // recv_msg(receiveMessage, sizeof(receiveMessage));
-    // fprintf(stderr, "RRRRecive: %s", receiveMessage);
-    // sscanf(receiveMessage, "%d", &client_port);
-    // fprintf(stderr, "Assign port: %d, client port: %d\n", port, client_port);
-    
 
     // connect to client
     int sendfd = 0;
@@ -137,7 +119,7 @@ int Connection::create_pipe(SSL_CTX *ctx){
         printf("Fail to create a socket.\n");
         return -1;
     }
-    printf("Successfully build socket for sending to client\n");
+    // printf("Successfully build socket for sending to client\n");
     sleep(1);
 
     // connect socket
@@ -167,14 +149,9 @@ int Connection::create_pipe(SSL_CTX *ctx){
         return -1;
     }
 
-    // int clientSocketfd = *(int*)socket_desc;
-    // fprintf(stderr, "tid=%lu handle connection fd=%d\n", pthread_self(), clientSocketfd);
     fprintf(stderr, "SSL handshake successful for fd=%d\n", sendfd);
     _switch = true;
 
-    
-    // SSL_read(send_ssl, receiveMessage, sizeof(receiveMessage));
-    // fprintf(stderr, "Test: %s\n", receiveMessage);
 
     return 0;
 }
@@ -183,8 +160,6 @@ int Connection::create_pipe(SSL_CTX *ctx){
 
 
 int Connection::user_register(){
-    fprintf(stderr, "user_register\n");
-
 
     // Register: set username
     char sendMessage[100] = "Register as new user, please enter username: ";
@@ -220,11 +195,8 @@ int Connection::user_register(){
     memset(sendMessage, 0, sizeof(sendMessage));
 
     sprintf(sendMessage, "Successfully register. Hi, %s!\n", _userName.c_str());
-    // fprintf(stderr, "%s", sendMessage);
     send_msg(sendMessage, sizeof(sendMessage));
     
-
-    // fprintf(stderr, "Try Create User\n");
     setUser(UserInfo(_userName, _pwd));
     fprintf(stderr, "Finish Create User\n");
     return 0;
@@ -233,20 +205,16 @@ int Connection::user_register(){
 
 
 int Connection::user_login(){
-    printf("user_login\n");
 
     char sendMessage[100] = "Please enter user name: ";
     char receiveMessage[100];
     send_msg(sendMessage, sizeof(sendMessage));
     recv_msg(receiveMessage, sizeof(receiveMessage));
 
-    // char userName[25];
 
     if(!user_exist(receiveMessage)){
         strcpy(sendMessage, "<Login Fail> User not exist.\n");
         send_msg(sendMessage, sizeof(sendMessage));
-        // close_connection("<Login Fail> User not exist.");
-        // throw ClientException("Client Create Error: User not exist.");
         return -1;
     }
 
@@ -266,11 +234,7 @@ int Connection::user_login(){
     if (count == 0){
         sprintf(sendMessage, "<Login Fail> Password incorrect.\n");
         send_msg(sendMessage, sizeof(sendMessage));
-        // close_connection("<Login Fail> Password incorrect.");
         return -1;
-        // throw ClientException("Client Create Error: pwd wrong");
-        
-        // return NULL;
     }
 
     string pwd = receiveMessage;
@@ -278,11 +242,8 @@ int Connection::user_login(){
     sprintf(sendMessage, "Successfully log in. Hi, %s!\n", userName.c_str());
     send_msg(sendMessage, sizeof(sendMessage));
     
-    
-    // user = UserInfo(userName, pwd);
     setUser(UserInfo(userName, pwd));
     fprintf(stderr, "Finish Create User\n");
-    // UserInfo user_info(userName, pwd);
     return 0;
 }
 
@@ -290,7 +251,6 @@ int Connection::user_login(){
 
 int Connection::user_auth(){
 
-    // sleep(2);
     char receiveMessage[100];
     char sendMessage[100];
     char welcomeMessage[] = "Welcome to Chatroom. Please select your option.\n" 
@@ -302,7 +262,6 @@ int Connection::user_auth(){
     send_msg(welcomeMessage, sizeof(welcomeMessage));
     recv_msg(receiveMessage, sizeof(receiveMessage));
 
-    fprintf(stderr, "GET: %s\n", receiveMessage);
 
 
     while(incorrect_input(receiveMessage)){
