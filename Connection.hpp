@@ -7,7 +7,6 @@
 #include "helper.hpp"
 #include "UserInfo.hpp"
 using namespace std;
-// using std::size_t;
 
 const int SOCKBUFSIZE = 5000;
 

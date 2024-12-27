@@ -59,7 +59,6 @@ void handle_connection(int clientSocketfd, SSL_CTX *ctx){
         return;
     }
 
-    // int clientSocketfd = *(int*)socket_desc;
     fprintf(stderr, "tid=%lu handle connection fd=%d\n", pthread_self(), clientSocketfd);
     fprintf(stderr, "SSL handshake successful for fd=%d\n", clientSocketfd);
 
@@ -115,9 +114,7 @@ void handle_connection(int clientSocketfd, SSL_CTX *ctx){
         return;
     }
 
-    // fprintf(stderr, "Users chat connection found!\n");
     Connection &conn2 = *(userConnMap[userName2]);
-    // fprintf(stderr, "Users chat connection create!\n");
 
 
     Chatroom chatroom(conn, conn2);
@@ -128,7 +125,6 @@ void handle_connection(int clientSocketfd, SSL_CTX *ctx){
 
     strcpy(sendMessage, "~~ Welcome to the chatroom ~~\n");
     conn.send_msg(sendMessage, strlen(sendMessage));
-    // chatroom.broadcase(sendMessage);
 
     chatroom.run();
 
@@ -169,37 +165,6 @@ int create_welcome_socket(){
     return socketfd;
 }
 
-
-// int create_listening_socket(int port, int max_conn_count){
-//     // int socketfd = 0; 
-
-//     // create socket
-//     int socketfd = socket(AF_INET, SOCK_STREAM, 0); // SOCK_STREAM -> TCP, SOCK_DGRAM -> UDP
-
-//     if (socketfd == -1) {
-//         handle_socket_error("Failed to create socket :(\n");
-        
-//     }
-
-//     // bind socket 
-//     struct sockaddr_in serverInfo;
-//     bzero(&serverInfo, sizeof(serverInfo)); // init to 0
-//     serverInfo.sin_family = PF_INET; // Ipv4
-//     serverInfo.sin_addr.s_addr = INADDR_LOOPBACK; // kernel decide IP
-//     serverInfo.sin_port = htons(port);
-
-//     if (bind(socketfd, (struct sockaddr *)&serverInfo, sizeof(serverInfo)) == -1) {
-//         handle_socket_error("Failed to bind socket :(\n");
-//     }
-
-//     // listen
-//     if(listen(socketfd, max_conn_count) == -1){
-//         handle_socket_error("Failed to listen on socket :(\n");
-//     } 
-//     fprintf(stderr, "Server is listening on port %d...\n", port);
-//     return 0;
-// }
-
 int main(int argc , char *argv[])
 {
     // disable printf buffering
@@ -210,54 +175,26 @@ int main(int argc , char *argv[])
     SSL_load_error_strings(); 
     OpenSSL_add_all_algorithms();
 
-
-
-
     int socketfd = create_welcome_socket();
     int clientSocketfd = 0;
 
-
     ThreadPool pool(10);
-
     
     struct sockaddr_in clientInfo;
     int addrlen = sizeof(clientInfo);
     int thread_count = 0;
 
     while(1){
-    // for(int i=0 ; i<10 ; i++){
         clientSocketfd = accept(socketfd, (struct sockaddr*) &clientInfo, (socklen_t*)&addrlen);
-
         if (clientSocketfd == -1) {
             handle_socket_error("Failed to accept connection :(\n");
             continue; // Continue accepting other clients
         }
-        // fprintf(stderr, "New client connected!\n");
-        
         // init SSL context for each connection 
         static SSL_CTX *ctx = create_server_context(); 
         configure_server_context(ctx); // Create an SSL object 
         pool.enqueue([clientSocketfd] { handle_connection(clientSocketfd, ctx); });
-        
-        // pthread_t thread_id;
-        
-        
-        // if (pthread_create(&tid[thread_count++], nullptr, handle_connection, (void*)&clientSocketfd) != 0) {
-        //     handle_socket_error("Failed to create thread for client :(\n");
-        //     // std::cerr << "Failed to create thread for client." << std::endl;
-        //     close(clientSocketfd);
-        // }
-
-
-
-        // pthread_detach(thread_id);
-
-
-        // handle_connection(clientSocketfd);
-        // close(clientSocketfd);
-
     }
-
 
     close(socketfd);
 
