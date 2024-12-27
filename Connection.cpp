@@ -54,15 +54,15 @@ int Connection::send_msg(char *msg, size_t size){
     ssize_t bytes_sent;
 
     if(_switch){
-        fprintf(stderr, "Sending msg thru send_ssl: %s, size = %lu\n", msg, size);
+        // fprintf(stderr, "Sending msg thru send_ssl: %s, size = %lu\n", msg, size);
         bytes_sent = SSL_write(send_ssl, msg, size);
     } else {
-        fprintf(stderr, "Sending msg thru ssl: %s, size = %lu\n", msg, size);
+        // fprintf(stderr, "Sending msg thru ssl: %s, size = %lu\n", msg, size);
         bytes_sent = SSL_write(ssl, msg, size);
     }
 
 
-    fprintf(stderr, "byte sent: %ld\n", bytes_sent);
+    // fprintf(stderr, "byte sent: %ld\n", bytes_sent);
     if(bytes_sent <= 0){
         handle_socket_error("Error sending message :(\n");
     }
@@ -78,7 +78,7 @@ int Connection::recv_msg(char *msg, size_t size){
     
     if(bytes_received > 0){
         msg[bytes_received] = '\0';
-        fprintf(stderr,"receiving message: %s\n", msg);
+        // fprintf(stderr,"receiving message: %s\n", msg);
     } 
     else{
         handle_socket_error("Error receiving message :(\n", false);
@@ -92,7 +92,7 @@ bool Connection::user_exist(string _name){
 }
 
 bool Connection::correct_password(string userName, string pwd){
-    fprintf(stderr, "User %s pwd is %s, get: %s\n", userName.c_str(), userPasswordMap[userName].c_str(), pwd.c_str());
+    // fprintf(stderr, "User %s pwd is %s, get: %s\n", userName.c_str(), userPasswordMap[userName].c_str(), pwd.c_str());
     return userPasswordMap[userName].compare(pwd) == 0;
 }
 

@@ -22,7 +22,7 @@ std::atomic<bool> exitFlag(false);
 
 void *receiveThread(void *socket_desc){
 
-    fprintf(stderr, "Enter receiveThread\n");
+    // fprintf(stderr, "Enter receiveThread\n");
     // return nullptr;
     int recvSocketfd = *(int*)socket_desc;
     // SSL *ssl = (SSL*)socket_desc;
@@ -34,11 +34,11 @@ void *receiveThread(void *socket_desc){
     }
     
 
-    fprintf(stderr, "Creating SSL...\n");
+    // fprintf(stderr, "Creating SSL...\n");
 
     // Create SSL object 
     SSL *ssl = SSL_new(ctx);
-    fprintf(stderr, "Create new recv_ssl!\n");
+    // fprintf(stderr, "Create new recv_ssl!\n");
     SSL_set_fd(ssl, recvSocketfd);
     sleep(1);
     if (SSL_connect(ssl) <= 0) { 
@@ -49,7 +49,7 @@ void *receiveThread(void *socket_desc){
         close(recvSocketfd); 
         return nullptr; 
     }
-    printf("Successfully create recv_ssl!\n");
+    // printf("Successfully create recv_ssl!\n");
 
 
 
@@ -142,19 +142,19 @@ int create_welcome_socket(int port){
     if(listen(socketfd, 5) == -1){
         handle_socket_error("Failed to listen on socket :(\n");
     } 
-    fprintf(stderr, "Client is listening on port %d...\n", port);
+    // fprintf(stderr, "Client is listening on port %d...\n", port);
     return socketfd;
 }
 
 
 
 int create_recv_fd(SSL_CTX *ctx , SSL *ssl){
-    fprintf(stderr, "Creating pipe...\n");
+    // fprintf(stderr, "Creating pipe...\n");
     int recvByte;
     char receiveMessage[100];
     recvByte = SSL_read(ssl, receiveMessage, 100); 
-    printf("Receive Byte = %d\n", recvByte);
-    printf("Receive msg = %s\n", receiveMessage);
+    // printf("Receive Byte = %d\n", recvByte);
+    // printf("Receive msg = %s\n", receiveMessage);
     
     int port;
     if(recvByte > 0){
@@ -176,7 +176,7 @@ int create_recv_fd(SSL_CTX *ctx , SSL *ssl){
         handle_socket_error("Failed to accept connection :(\n");
         return -1; // Continue accepting other clients
     }
-    fprintf(stderr, "Connectted with server!\n");   
+    // fprintf(stderr, "Connectted with server!\n");   
 
     return recvSocketfd;
 }
@@ -224,7 +224,7 @@ int main(int argc , char *argv[])
         return -1;
     }
 
-    printf("Successfully build socket\n");
+    // printf("Successfully build socket\n");
 
     // connect socket
     struct sockaddr_in info;
@@ -262,14 +262,14 @@ int main(int argc , char *argv[])
         return -1; 
     }
 
-    printf("Sending SSL create successfully!\n");
+    printf("Message is encrypted via OpenSSL\n");
 
     
     int recv_socketfd = create_recv_fd(ctx, ssl);
     // SSL *recv_ssl = create_recv_fd(ctx, ssl);
     
 
-    fprintf(stderr,"Creating pthread...\n");
+    // fprintf(stderr,"Creating pthread...\n");
     
     // Create thread for receiving message
     pthread_t thread_id;
@@ -285,13 +285,16 @@ int main(int argc , char *argv[])
 
     // Read user input and send
     while(!exitFlag.load()){
-        scanf("%s", userInput);
+        scanf("%[^\n]", userInput);
+        getchar();
         SSL_write(ssl, userInput, strlen(userInput));
 
         if(strcmp(userInput, "transferfile")==0){
             char filename[100];
             printf("Please enter filename: ");
-            scanf("%s", filename);
+            // scanf("%s", filename);
+            scanf("%[^\n]", filename);
+            getchar();
             FILE *file = fopen(filename, "rb");
             if (file == NULL) {
                 perror("Failed to open file");

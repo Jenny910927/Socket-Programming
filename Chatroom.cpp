@@ -74,13 +74,13 @@ void Chatroom::run(){
             }
         }
         else if(check_valid()){
-            fprintf(stderr, "Receive %d bytes from %s.\n", recvByte, conn1.getUserName().c_str());
+            // fprintf(stderr, "Receive %d bytes from %s.\n", recvByte, conn1.getUserName().c_str());
             sprintf(prefix, "[Msg from %s] ", conn1.getUserName().c_str());
-            fprintf(stderr, "Prefix = %s\n", prefix);
+            // fprintf(stderr, "Prefix = %s\n", prefix);
             strcat(prefix, buffer);
-            fprintf(stderr, "Prefix = %s\n", prefix);
+            // fprintf(stderr, "Prefix = %s\n", prefix);
             strcat(prefix, "\n");
-            fprintf(stderr, "Prefix = %s\n", prefix);
+            // fprintf(stderr, "Prefix = %s\n", prefix);
             conn2.send_msg(prefix, strlen(prefix));
         }
     }
@@ -139,7 +139,7 @@ void Chatroom::join(){
         // pthread_cond_t cond = waitUser[conn2.getUserName()];
         // pthread_cond_signal(&cond);
         // pthread_cond_signal(&waitUser[conn2.getUserName()]);
-        fprintf(stderr, "User %s has catch waiting user.\n", conn1.getUserName().c_str());
+        // fprintf(stderr, "User %s has catch waiting user.\n", conn1.getUserName().c_str());
     }
 
     // release lock

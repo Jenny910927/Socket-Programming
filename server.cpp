@@ -115,9 +115,9 @@ void handle_connection(int clientSocketfd, SSL_CTX *ctx){
         return;
     }
 
-    fprintf(stderr, "Users chat connection found!\n");
+    // fprintf(stderr, "Users chat connection found!\n");
     Connection &conn2 = *(userConnMap[userName2]);
-    fprintf(stderr, "Users chat connection create!\n");
+    // fprintf(stderr, "Users chat connection create!\n");
 
 
     Chatroom chatroom(conn, conn2);
@@ -232,7 +232,7 @@ int main(int argc , char *argv[])
             handle_socket_error("Failed to accept connection :(\n");
             continue; // Continue accepting other clients
         }
-        fprintf(stderr, "New client connected!\n");
+        // fprintf(stderr, "New client connected!\n");
         
         // init SSL context for each connection 
         static SSL_CTX *ctx = create_server_context(); 
