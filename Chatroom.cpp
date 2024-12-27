@@ -53,8 +53,27 @@ void Chatroom::run(){
             conn2.close_connection("Client left chatroom");
             return;
         }
+        if(strcmp(buffer, "transferfile")==0){
+            fprintf(stderr, "file transfer from %s to %s\n", userName1.c_str(), userName2.c_str());
+            strcpy(buffer, "[TransferFile]");
+            conn2.send_msg(buffer, strlen(buffer));
 
-        if(check_valid()){
+            while(1){
+                int recvByte = conn1.recv_msg(buffer, sizeof(buffer));
+                if(recvByte <= 0){
+                    fprintf(stderr, "%s connection break\n", userName1.c_str());
+                    valid = false;
+                    break;
+                }
+                conn2.send_msg(buffer, strlen(buffer));
+                if(strcmp(buffer, "EOF")==0){
+                    fprintf(stderr,"Finish sending file.\n");
+                    break;
+                }
+
+            }
+        }
+        else if(check_valid()){
             fprintf(stderr, "Receive %d bytes from %s.\n", recvByte, conn1.getUserName().c_str());
             sprintf(prefix, "[Msg from %s] ", conn1.getUserName().c_str());
             fprintf(stderr, "Prefix = %s\n", prefix);

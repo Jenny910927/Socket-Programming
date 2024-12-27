@@ -17,7 +17,7 @@ client.o: client.cpp
 	g++ -c client.cpp
 
 clean:
-	rm -f server client *.o
+	rm -f server client *.o received_file
 
 test_client: test_client.o
 	g++ -g test_client.o $(OBJS) -o test_client $(CFLAGS)

@@ -70,9 +70,33 @@ void *receiveThread(void *socket_desc){
                 printf("Type any key to close... ");
                 break;
             }
-            receiveMessage[recvByte] = '\0';
-            // printf("Receive Msg | %s\n", receiveMessage);
-            fprintf(stdout, "%s", receiveMessage);
+            if(strstr(receiveMessage, "[TransferFile]")){
+                printf("Receiving file...\n");
+                FILE *file = fopen("received_file", "wb");
+                if (file == NULL) {
+                    perror("Failed to create file");
+                    break;
+                }
+
+                while ((recvByte = SSL_read(ssl, receiveMessage, 100)) > 0) {
+                    if (strncmp(receiveMessage, "EOF", 3) == 0) {
+                        break;
+                    }
+                    fwrite(receiveMessage, sizeof(char), recvByte, file);
+                }
+
+                fclose(file);
+                printf("File transfer complete. Filename: received_file\n");
+            }
+            else{
+                receiveMessage[recvByte] = '\0';
+                // printf("Receive Msg | %s\n", receiveMessage);
+                fprintf(stdout, "%s", receiveMessage);
+            }
+
+
+
+            
         }else if (recvByte < 0) { 
             int err = SSL_get_error(ssl, recvByte); 
             if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) { 
@@ -155,17 +179,30 @@ int create_recv_fd(SSL_CTX *ctx , SSL *ssl){
     fprintf(stderr, "Connectted with server!\n");   
 
     return recvSocketfd;
-
-
-    // char msg[100];
-    // sprintf(msg, "%d", port);
-    // ssize_t bytes_sent = SSL_write(recv_ssl, msg, sizeof(msg));
-    // fprintf(stderr, "Byte send: %lu\n", bytes_sent);
-
-    
-    // return recv_ssl;
-
 }
+
+void send_file(FILE *file, SSL *ssl) {
+    char buffer[100];
+    size_t bytes_read;
+
+    while ((bytes_read = fread(buffer, sizeof(char), 100, file)) > 0) {
+        if (SSL_write(ssl, buffer, bytes_read) == -1) {
+            perror("Error sending file");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    // Send EOF tag
+    if (SSL_write(ssl, "EOF", 3) == -1) {
+        perror("Error sending EOF marker");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("File transfer complete.\n");
+}
+
+
+
 
 int main(int argc , char *argv[])
 {
@@ -244,13 +281,28 @@ int main(int argc , char *argv[])
 
 
 
-    // char receiveMessage[100];
     char userInput[100];
 
     // Read user input and send
     while(!exitFlag.load()){
         scanf("%s", userInput);
         SSL_write(ssl, userInput, strlen(userInput));
+
+        if(strcmp(userInput, "transferfile")==0){
+            char filename[100];
+            printf("Please enter filename: ");
+            scanf("%s", filename);
+            FILE *file = fopen(filename, "rb");
+            if (file == NULL) {
+                perror("Failed to open file");
+                continue;
+            }
+            send_file(file, ssl);
+            fclose(file);
+
+
+        }
+
         // send(socketfd, userInput, sizeof(userInput), 0);
     }
 
